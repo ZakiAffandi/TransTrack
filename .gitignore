@@ -1,0 +1,12 @@
+# Mengabaikan SEMUA folder node_modules
+**/node_modules
+
+# Mengabaikan SEMUA file .env
+**/.env
+
+# Mengabaikan SEMUA kunci service account
+**/transtrack-86fba-f*.json
+**/serviceAccountKey.json
+
+# Lain-lain
+.DS_Store
