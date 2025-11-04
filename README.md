@@ -710,6 +710,6 @@ Proyek ini dibuat untuk keperluan akademis.
 
 **Last Updated:** November 2025
 
-Sekian terimakasih 
+Sekian terimakasih. Semoga bermanfaat
 
 </div>
