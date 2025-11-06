@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 /**
  * @swagger
@@ -298,12 +299,16 @@ router.post('/register', async (req, res) => {
       }
     }
 
+    // Hash password sebelum simpan
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     const insertUserSql = `
       INSERT INTO users (name, email, phone, password)
       VALUES ($1, $2, $3, $4)
       RETURNING id, name, email, phone, created_at AS "createdAt", updated_at AS "updatedAt";
     `;
-    const userResult = await pool.query(insertUserSql, [name, email, phone, password]);
+    const userResult = await pool.query(insertUserSql, [name, email, phone, hashedPassword]);
     const user = userResult.rows[0];
 
     // Compute displayId for the inserted user
@@ -348,6 +353,73 @@ router.post('/register', async (req, res) => {
       error: 'Kesalahan server internal',
       message: error.message || 'Terjadi kesalahan saat mendaftarkan pengguna'
     });
+  }
+});
+
+/**
+ * @swagger
+ * /api/users/login:
+ *   post:
+ *     summary: Login pengguna
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - identifier
+ *               - password
+ *             properties:
+ *               identifier:
+ *                 type: string
+ *                 description: email atau phone
+ *                 example: john.doe@example.com
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: SecurePassword123!
+ *     responses:
+ *       200:
+ *         description: Login berhasil
+ *       401:
+ *         description: Kredensial tidak valid
+ */
+router.post('/login', async (req, res) => {
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kesalahan validasi',
+        message: 'identifier dan password wajib diisi'
+      });
+    }
+
+    const userSql = `
+      SELECT id, name, email, phone, password, created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM users
+      WHERE email = $1 OR phone = $1
+      LIMIT 1
+    `;
+    const result = await pool.query(userSql, [identifier]);
+    if (result.rowCount === 0) {
+      return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Pengguna tidak ditemukan' });
+    }
+    const userRow = result.rows[0];
+
+    const isMatch = await bcrypt.compare(password, userRow.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Password salah' });
+    }
+
+    // Kembalikan profil tanpa password
+    const { password: _pw, ...publicUser } = userRow;
+    res.json({ success: true, message: 'Login berhasil', data: publicUser });
+  } catch (error) {
+    console.error('Kesalahan saat login:', error);
+    res.status(500).json({ success: false, error: 'Kesalahan server internal', message: error.message || 'Login gagal' });
   }
 });
 

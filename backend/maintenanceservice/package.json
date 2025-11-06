@@ -1,7 +1,7 @@
 {
-  "name": "driverservice",
+  "name": "maintenanceservice",
   "version": "1.0.0",
-  "description": "DriverService - API Provider untuk mengelola data master pengemudi pada TransTrack",
+  "description": "MaintenanceService - API Provider untuk mengelola data master riwayat dan jadwal perbaikan bus pada TransTrack",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -26,10 +26,10 @@
     "node-pg-migrate": "^8.0.3",
     "pg": "^8.16.3",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.0"
+    "swagger-ui-express": "^5.0.0",
+    "transtrack-monorepo": "file:../.."
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
   }
 }
-

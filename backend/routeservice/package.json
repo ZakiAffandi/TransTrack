@@ -8,7 +8,6 @@
     "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate": "node scripts/migrate.js"
-
   },
   "keywords": [
     "express",
@@ -27,7 +26,8 @@
     "node-pg-migrate": "^8.0.3",
     "pg": "^8.16.3",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.0"
+    "swagger-ui-express": "^5.0.0",
+    "transtrack-monorepo": "file:../.."
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

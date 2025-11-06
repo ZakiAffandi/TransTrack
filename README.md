@@ -15,6 +15,7 @@
 
 ## 📑 Table of Contents
 
+- [🧭 Deskripsi Singkat](#-deskripsi-singkat)
 - [🏗️ Arsitektur](#️-arsitektur)
 - [📦 Services yang Tersedia](#-services-yang-tersedia)
 - [📁 Struktur Proyek](#-struktur-proyek)
@@ -25,7 +26,8 @@
 - [🛠️ Teknologi yang Digunakan](#️-teknologi-yang-digunakan)
 - [📝 Migration & Database Setup](#-migration--database-setup)
 - [🧪 Testing](#-testing)
-- [⚙️ Menjalankan Semua Services](#️-menjalankan-semua-services)
+- [⚙️ Menjalankan Semua Services (concurrently)](#️-menjalankan-semua-services-concurrently)
+  - [Alternatif: Jalankan per Service (manual)](#alternatif-jalankan-per-service-manual)
 - [📚 Dokumentasi Detail](#-dokumentasi-detail)
 - [⚠️ Catatan Penting](#️-catatan-penting)
 - [🔒 Security Notes](#-security-notes)
@@ -73,6 +75,58 @@ Proyek ini menggunakan **arsitektur microservice** dengan setiap service sebagai
 
 ---
 
+## 🧭 Deskripsi Singkat
+
+TransTrack adalah sistem manajemen transportasi berbasis arsitektur microservice. Setiap service bertanggung jawab pada domain tertentu (rute, pengemudi, pengguna, perawatan), menggunakan PostgreSQL, terdokumentasi dengan Swagger, dan dapat dijalankan mandiri. Frontend React disediakan sebagai antarmuka dasar untuk demonstrasi.
+
+---
+
+## 🚀 Mulai Cepat (Clone & Jalankan)
+
+1) Clone repo
+
+```bash
+git clone https://github.com/DevZkafnd/TransTrack.git
+cd TransTrack
+```
+
+2) Jalankan semua service + frontend (auto install deps + migrate TicketService):
+
+```bash
+npm run dev
+```
+
+3) Buka aplikasi dan dokumentasi:
+
+- Frontend (React): `http://localhost:4000`
+- RouteService Swagger: `http://localhost:3000/api-docs`
+- DriverService Swagger: `http://localhost:3001/api-docs`
+- UserService Swagger: `http://localhost:3002/api-docs`
+- MaintenanceService Swagger: `http://localhost:3003/api-docs`
+- TicketService Swagger: `http://localhost:3004/api-docs`
+
+4) Variabel lingkungan (.env) per service
+
+- Salin `env.example` → `.env` di setiap folder service dalam `backend/*service/` lalu sesuaikan koneksi PostgreSQL.
+- Untuk frontend, Anda tidak wajib mengubah `.env` saat pengembangan: klien otomatis menggunakan UserService lokal di `http://localhost:3002/api` jika API gateway tidak tersedia.
+
+5) Login/Daftar & Pembelian Tiket
+
+- Gunakan modal login/daftar dari frontend (menyambung ke `UserService`).
+- Halaman pembelian tiket ada di `/ticket`. Saat “Bayar Sekarang”, sistem membuat tiket di database (TicketService) dan menandainya success.
+
+6) Troubleshooting umum
+
+- Port bentrok → hentikan proses lama (Windows PowerShell: `netstat -ano | findstr :<PORT>` lalu kill PID) atau ubah `PORT` di `.env` service terkait.
+- Connection refused ke API → pastikan service tujuan up (cek `/health`) dan base URL frontend sesuai (frontend fallback otomatis ke 3002 untuk user saat dev).
+- Tabel TicketService hilang → jalankan ulang `npm run dev` (script `predev` akan menjalankan migrasi TicketService otomatis).
+
+7) Repository
+
+- GitHub: `https://github.com/DevZkafnd/TransTrack.git`
+
+---
+
 ## 📦 Services yang Tersedia
 
 | Service | Port | 🎯 Tugas | 📖 Dokumentasi | 🔗 Health Check |
@@ -89,7 +143,8 @@ Proyek ini menggunakan **arsitektur microservice** dengan setiap service sebagai
 ```
 TransTrack/
 │
-├── 📂 routeservice/                    # RouteService (Port 3000)
+├── 📂 backend/
+│   ├── 📂 routeservice/                 # RouteService (Port 3000)
 │   ├── 📂 config/
 │   │   ├── 📄 db.js                   # Konfigurasi koneksi PostgreSQL
 │   │   ├── 📄 swagger.js              # Konfigurasi Swagger
@@ -105,7 +160,7 @@ TransTrack/
 │   ├── 📄 env.example                 # Template environment variables
 │   └── 📄 README.md                   # Dokumentasi RouteService
 │
-├── 📂 driverservice/                   # DriverService (Port 3001)
+│   ├── 📂 driverservice/                # DriverService (Port 3001)
 │   ├── 📂 config/
 │   ├── 📂 migrations/
 │   │   └── 📄 20251105002950_initial_schema.js
@@ -119,7 +174,7 @@ TransTrack/
 │   ├── 📄 env.example
 │   └── 📄 README.md
 │
-├── 📂 userservice/                     # UserService (Port 3002)
+│   ├── 📂 userservice/                  # UserService (Port 3002)
 │   ├── 📂 config/
 │   ├── 📂 migrations/
 │   │   └── 📄 20251105003100_initial_schema.js
@@ -133,7 +188,7 @@ TransTrack/
 │   ├── 📄 env.example
 │   └── 📄 README.md
 │
-├── 📂 maintenanceservice/              # MaintenanceService (Port 3003)
+│   ├── 📂 maintenanceservice/           # MaintenanceService (Port 3003)
 │   ├── 📂 config/
 │   ├── 📂 migrations/
 │   │   └── 📄 20251105004443_initial_schema.js
@@ -147,9 +202,10 @@ TransTrack/
 │   ├── 📄 env.example
 │   └── 📄 README.md
 │
-├── 📄 package.json                     # Root package.json
+├── 📂 frontend/                         # Aplikasi React.js (homepage)
+├── 📄 package.json                      # Root package.json
 ├── 📄 package-lock.json
-└── 📄 README.md                        # Dokumentasi utama (file ini)
+└── 📄 README.md                         # Dokumentasi utama (file ini)
 ```
 
 ---
@@ -181,7 +237,7 @@ Setiap service memiliki setup yang sama. Berikut langkah-langkahnya:
 #### 1️⃣ RouteService (Port 3000)
 
 ```bash
-cd routeservice
+cd backend/routeservice
 npm install
 cp env.example .env
 # Edit .env sesuai konfigurasi database Anda
@@ -200,7 +256,7 @@ npm run dev
 #### 2️⃣ DriverService (Port 3001)
 
 ```bash
-cd driverservice
+cd backend/driverservice
 npm install
 cp env.example .env
 # Edit .env (PORT=3001)
@@ -216,7 +272,7 @@ npm run dev
 #### 3️⃣ UserService (Port 3002)
 
 ```bash
-cd userservice
+cd backend/userservice
 npm install
 cp env.example .env
 # Edit .env (PORT=3002)
@@ -232,7 +288,7 @@ npm run dev
 #### 4️⃣ MaintenanceService (Port 3003)
 
 ```bash
-cd maintenanceservice
+cd backend/maintenanceservice
 npm install
 cp env.example .env
 # Edit .env (PORT=3003)
@@ -416,12 +472,12 @@ CREATE TABLE maintenance (
 
 ## 🛠️ Teknologi yang Digunakan
 
-Semua services menggunakan teknologi yang sama:
+Backend dan frontend menggunakan teknologi berikut:
 
 | Teknologi | Versi | Deskripsi |
 |-----------|-------|-----------|
 | **Node.js** | v16+ | Runtime environment |
-| **Express.js** | 4.18+ | Web framework |
+| **Express.js** | 4.18+ | Web framework (backend services) |
 | **PostgreSQL** | 13+ | Database |
 | **pg** | 8.16+ | PostgreSQL driver untuk Node.js |
 | **node-pg-migrate** | 8.0+ | Database migrations |
@@ -430,6 +486,10 @@ Semua services menggunakan teknologi yang sama:
 | **swagger-ui-express** | 5.0+ | UI untuk dokumentasi Swagger |
 | **cors** | 2.8+ | Cross-Origin Resource Sharing |
 | **dotenv** | 16.3+ | Environment variables management |
+| **React** | 18 | Frontend library |
+| **react-scripts** | 5 | CRA tooling untuk development/build |
+| **axios** | 1.x | HTTP client di frontend |
+| **concurrently** | 8 | Menjalankan banyak perintah dev secara paralel (monorepo root) |
 
 ---
 
@@ -540,31 +600,100 @@ curl -X POST http://localhost:3003/api/maintenance \
 
 ---
 
-## ⚙️ Menjalankan Semua Services
+## ⚙️ Menjalankan Semua Services (concurrently)
 
-Untuk development, buka **terminal terpisah** untuk setiap service:
+Cara paling cepat untuk development adalah menggunakan `concurrently` dari root monorepo. Ini akan menjalankan frontend dan seluruh backend services sekaligus dalam satu terminal.
 
-### Terminal 1: RouteService
+### 1) Instal dependencies
+
+Jalankan per service (pertama kali saja):
+
 ```bash
-cd routeservice && npm run dev
+# Backend services
+cd backend/routeservice && npm install
+cd ../driverservice && npm install
+cd ../userservice && npm install
+cd ../maintenanceservice && npm install
+
+# Frontend
+cd ../../../frontend && npm install
 ```
 
-### Terminal 2: DriverService
+Di root monorepo, pastikan dev tool sudah terpasang (sudah disetup dalam repo):
+
 ```bash
-cd driverservice && npm run dev
+cd ..
+npm install   # memastikan devDependency root (concurrently) terpasang
 ```
 
-### Terminal 3: UserService
+### 2) Setup environment
+
+Untuk tiap service, salin `env.example` ke `.env` lalu sesuaikan:
+
 ```bash
-cd userservice && npm run dev
+cd backend/<nama-service>
+cp env.example .env
+# edit .env (PORT, DB_*)
 ```
 
-### Terminal 4: MaintenanceService
+### 3) Jalankan migration/setup database
+
 ```bash
-cd maintenanceservice && npm run dev
+cd backend/<nama-service>
+npm run setup    # atau: npm run migrate
 ```
 
-> **💡 Tip:** Gunakan terminal multiplexer seperti `tmux` atau `screen` untuk menjalankan semua services dalam satu window.
+### 4) Jalankan semua layanan sekaligus
+
+Dari folder root proyek:
+
+```bash
+npm run dev
+```
+
+Perintah ini mengeksekusi skrip berikut dari `package.json` root:
+
+```json
+{
+  "scripts": {
+    "dev:frontend": "npm --prefix frontend start",
+    "dev:driverservice": "npm --prefix backend/driverservice start",
+    "dev:maintenanceservice": "npm --prefix backend/maintenanceservice start",
+    "dev:routeservice": "npm --prefix backend/routeservice start",
+    "dev:userservice": "npm --prefix backend/userservice start",
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:driverservice\" \"npm run dev:maintenanceservice\" \"npm run dev:routeservice\" \"npm run dev:userservice\""
+  }
+}
+```
+
+### Menghentikan semua server
+
+Tekan `Ctrl + C` sekali di terminal yang menjalankan `npm run dev`. `concurrently` akan meneruskan sinyal ke semua proses dan menghentikan semuanya.
+
+Jika setelah berhenti masih ada port yang terpakai, tunggu beberapa detik lalu jalankan lagi. Bila perlu, tutup terminal lama atau restart proses Node yang tersisa.
+
+### Catatan tentang Docker
+
+Seluruh berkas Docker yang terdeteksi telah dihapus untuk menyederhanakan workflow development lokal berbasis `concurrently`.
+
+### Alternatif: Jalankan per Service (manual)
+
+Jika ingin menjalankan manual per terminal, ikuti pola berikut:
+
+```bash
+cd backend/routeservice && npm run dev
+cd backend/driverservice && npm run dev
+cd backend/userservice && npm run dev
+cd backend/maintenanceservice && npm run dev
+cd backend/ticketservice && npm run dev
+```
+
+---
+
+## 🧭 Navigasi Dokumentasi Lanjutan
+
+- Panduan Frontend (Color Palette, menambah halaman baru, integrasi API): `frontend/README.md`
+- Panduan Backend (membuat provider/API baru, dependensi, wiring monorepo): `backend/README.md`
 
 ---
 
@@ -572,10 +701,10 @@ cd maintenanceservice && npm run dev
 
 Setiap service memiliki README.md sendiri dengan dokumentasi lengkap:
 
-- 📖 [`routeservice/README.md`](routeservice/README.md)
-- 📖 [`driverservice/README.md`](driverservice/README.md)
-- 📖 [`userservice/README.md`](userservice/README.md)
-- 📖 [`maintenanceservice/README.md`](maintenanceservice/README.md)
+- 📖 [`backend/routeservice/README.md`](backend/routeservice/README.md)
+- 📖 [`backend/driverservice/README.md`](backend/driverservice/README.md)
+- 📖 [`backend/userservice/README.md`](backend/userservice/README.md)
+- 📖 [`backend/maintenanceservice/README.md`](backend/maintenanceservice/README.md)
 
 ---
 

@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global base styles */
+:root {
+  --color-primary: #008DA6;
+  --color-secondary: #FF7A59;
+  --color-background: #F8F8F8;
+  --color-text: #333333;
+  --color-text-secondary: #757575;
+}
+
+body {
+  @apply bg-background text-text;
+}
+
