@@ -49,51 +49,168 @@ DB_SSL=false
 
 ## Membuat Provider/API Baru (contoh: PaymentService)
 
-1) Buat folder baru: `backend/paymentservice/`
+1) Buat folder: `backend/paymentservice/`
 
-2) Buat file inti:
+2) package.json
 
-- `package.json` (sesuaikan skrip `start`, `dev`, dan dependensi di atas)
-- `server.js` (Express app; daftarkan `/health`, `/api-docs`, dan router utama)
+Contoh minimal (samakan versi dependensi dengan service lain):
+
+```json
+{
+  "name": "paymentservice",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "migrate": "node scripts/migrate.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "node-pg-migrate": "^8.0.3",
+    "pg": "^8.16.3",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0"
+  },
+  "devDependencies": { "nodemon": "^3.0.2" }
+}
+```
+
+3) Struktur file inti
+
+- `server.js` (Express + swagger + routes)
 - `config/db.js` (Pool PostgreSQL)
 - `config/swagger.js` (swaggerJsdoc setup)
 - `routes/*.js` (endpoint bisnis)
-- `env.example` (template ENV)
-- `scripts/migrate.js` (buat tabel yang dibutuhkan)
+- `env.example` (PORT, DB_*)
+- `scripts/migrate.js` (DDL tabel)
 
-3) Tambahkan ke root script supaya ikut jalan:
+Contoh `server.js`:
 
-Di `package.json` root:
+```js
+const express = require('express');
+const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
+const routes = require('./routes/payment');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3005;
+
+app.use(cors());
+app.use(express.json());
+app.get('/health', (req,res)=>res.json({status:'OK',service:'PaymentService'}));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api/payment', routes);
+app.listen(PORT, ()=>console.log(`PaymentService :${PORT}`));
+```
+
+Contoh `config/db.js`:
+
+```js
+const { Pool } = require('pg');
+require('dotenv').config();
+const pool = new Pool({
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || '',
+  host: process.env.DB_HOST || 'localhost',
+  port: Number(process.env.DB_PORT || 5432),
+  database: process.env.DB_NAME || 'transtrack_db',
+  ssl: String(process.env.DB_SSL || 'false') === 'true' ? { rejectUnauthorized:false } : false
+});
+module.exports = { pool };
+```
+
+Contoh `config/swagger.js`:
+
+```js
+const swaggerJsdoc = require('swagger-jsdoc');
+const options = { definition: { openapi:'3.0.0', info:{ title:'PaymentService', version:'1.0.0' } }, apis:['./routes/*.js'] };
+module.exports = swaggerJsdoc(options);
+```
+
+Contoh `routes/payment.js` dengan Swagger JSDoc:
+
+```js
+const router = require('express').Router();
+const { pool } = require('../config/db');
+/**
+ * @swagger
+ * /api/payment:
+ *   post:
+ *     summary: "Contoh proses pembayaran"
+ *     tags: [Payment]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               orderId: { type: string }
+ *               amount: { type: number }
+ *     responses:
+ *       201:
+ *         description: Dibuat
+ */
+router.post('/', async (req,res)=>{
+  const { orderId, amount } = req.body;
+  // contoh simpan ke DB
+  await pool.query('SELECT 1');
+  res.status(201).json({ success:true, message:'ok' });
+});
+module.exports = router;
+```
+
+4) `env.example`
+
+```env
+PORT=3005
+DB_USER=postgres
+DB_PASSWORD=
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=transtrack_db
+DB_SSL=false
+```
+
+5) `scripts/migrate.js` (DDL)
+
+```js
+const { pool } = require('../config/db');
+(async ()=>{
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+    await pool.query('CREATE TABLE IF NOT EXISTS payments (id uuid primary key default gen_random_uuid(), order_id text, amount numeric(12,2), created_at timestamptz default now());');
+    console.log('Migration OK');
+  } catch(e){ console.error(e); process.exit(1); } finally { await pool.end(); }
+})();
+```
+
+6) Wire ke root monorepo
+
+- `package.json` (root) → tambahkan skrip:
 
 ```json
 {
   "scripts": {
     "dev:paymentservice": "cross-env PORT=3005 npm --prefix backend/paymentservice start",
-    "dev": "concurrently \"...\" \"npm run dev:paymentservice\""
+    "dev": "concurrently \"...service lain...\" \"npm run dev:paymentservice\""
   }
 }
 ```
 
-4) Migrasi database
+Opsional: tambahkan `migrate:paymentservice` di root dan panggil dari `predev` jika perlu.
 
-- Jalankan dari root: `npm run dev` (atau buat skrip `migrate:paymentservice` serupa TicketService)
+7) Jalankan & uji
 
-5) Tambahkan dokumentasi Swagger
-
-Gunakan JSDoc Swagger pada tiap route, contoh:
-
-```js
-/**
- * @swagger
- * /api/payment:
- *   post:
- *     summary: "Contoh endpoint"
- */
+```bash
+npm run dev
+# Swagger: http://localhost:3005/api-docs
 ```
-
-6) Uji endpoint di Swagger UI
-
-`http://localhost:<port>/api-docs`
 
 ---
 
