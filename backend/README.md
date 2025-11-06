@@ -220,3 +220,83 @@ Tips:
 - Simpan secret di `.env`. Jangan commit `.env` ke repository.
 - Pastikan setiap service punya `health` endpoint untuk diagnosa cepat.
 
+---
+
+## Langkah-Langkah Detail (Checklist Praktis)
+
+0) Siapkan database PostgreSQL (sekali saja)
+
+```
+createdb transtrack_db
+```
+
+1) Buat folder service baru
+
+```
+mkdir backend/paymentservice
+```
+
+2) Inisialisasi package.json dan install dependensi
+
+```
+cd backend/paymentservice
+npm init -y
+npm i express cors dotenv pg node-pg-migrate swagger-jsdoc swagger-ui-express
+npm i -D nodemon
+```
+
+3) Buat file konfigurasi dan server
+
+- `config/db.js`: koneksi Pool PostgreSQL (lihat contoh di atas)
+- `config/swagger.js`: setup swaggerJsdoc (lihat contoh)
+- `server.js`: daftarkan `/health`, `/api-docs`, dan router bisnis
+
+4) Buat router bisnis
+
+- `routes/payment.js`: definisikan endpoint dengan komentar Swagger JSDoc
+- Gunakan parameterized query saat akses DB (`$1, $2, ...`)
+
+5) Buat migrasi sederhana
+
+- `scripts/migrate.js`: buat tabel yang diperlukan (contoh: `payments`)
+- Jalankan migrasi secara manual (opsional) atau otomatis via root `predev`
+
+6) Tambahkan `env.example`
+
+```
+PORT=3005
+DB_USER=postgres
+DB_PASSWORD=
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=transtrack_db
+DB_SSL=false
+```
+
+7) Sambungkan ke monorepo (root `package.json`)
+
+- Tambah skrip:
+
+```
+"dev:paymentservice": "cross-env PORT=3005 npm --prefix backend/paymentservice start"
+```
+
+- Masukkan ke skrip `dev` (concurrently) agar jalan bersama service lain
+- (Opsional) Tambah `migrate:paymentservice` dan panggil di `predev`
+
+8) Menjalankan service
+
+- Dari root: `npm run dev` (direkomendasikan)
+- Atau dari folder service: `npm run dev`
+
+9) Uji via Swagger UI
+
+- Buka `http://localhost:3005/api-docs`
+- Klik "Try it out" → isi body → Execute
+
+10) Deployment/dev tips
+
+- CORS: batasi origin saat production
+- Logging: gunakan level log dan jangan print secret
+- Error handling: kembalikan format respons konsisten `{ success, error, message }`
+

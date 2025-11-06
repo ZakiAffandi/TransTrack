@@ -94,6 +94,29 @@ useEffect(() => {
 }, []);
 ```
 
+### Validasi & Error Handling (Langkah Detail)
+
+1) Validasi data form di sisi klien (required, panjang minimal, format email, dsb.)
+
+2) Saat request dimulai, set state loading (mis. `isSubmitting=true`) agar tombol disable dan teks berubah.
+
+3) Tangkap error dari `try/catch`:
+
+```js
+try {
+  const res = await apiClient.post('/endpoint', payload);
+  if (res.data?.success) {
+    notify('success', 'Berhasil ...');
+  } else {
+    notify('warning', res.data?.message || 'Gagal');
+  }
+} catch (e) {
+  notify('error', e?.response?.data?.message || e?.message || 'Terjadi kesalahan');
+} finally {
+  setIsSubmitting(false);
+}
+```
+
 ## Jalankan Frontend Saja
 
 ```bash
@@ -118,4 +141,11 @@ const notify = (type, message) => setToast({ open:true, type, message });
 // ... di JSX
 <Toast open={toast.open} type={toast.type} message={toast.message} onClose={()=>setToast(t=>({ ...t, open:false }))} />
 ```
+
+### Pola UI yang konsisten
+
+- Primary action: tombol `bg-secondary text-white`
+- Secondary action: `border border-primary text-primary hover:bg-primary/10`
+- Kartu/konten: `bg-white rounded-xl shadow-sm border border-gray-100 p-6`
+- Teks judul: `text-text`, teks sekunder: `text-textSecondary`
 
