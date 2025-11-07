@@ -24,3 +24,58 @@ body {
   animation: popIn 0.25s ease-out;
 }
 
+.bus-marker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+}
+
+.bus-marker::before {
+  content: "";
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background-color: #008da6;
+  border-radius: 50%;
+  animation: pulse 1.6s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.8);
+    opacity: 0.1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translate(-50%, 40px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+.animate-slideUp {
+  animation: slideUp 0.4s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out;
+}

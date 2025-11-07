@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Toast from '../components/Toast';
 
 const SchedulePage = () => {
-  // 🔹 Data statis dummy
+  // Data statis dummy
   const routes = [
     { id: 1, name: 'Jakarta - Bandung' },
     { id: 2, name: 'Bandung - Surabaya' },
@@ -36,7 +36,7 @@ const SchedulePage = () => {
   const [toast, setToast] = useState({ open: false, type: 'info', message: '' });
   const notify = (type, message) => setToast({ open: true, type, message });
 
-  // 🔹 Validasi & tambah jadwal
+  // Validasi & tambah jadwal
   const handleSubmit = (e) => {
     e.preventDefault();
 
