@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import apiClient from '../services/apiService';
+import apiClient, { createSchedule, getBuses, getDrivers } from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 
 const Backdrop = ({ onClose }) => (
@@ -45,7 +45,7 @@ const SubmitButton = ({ children }) => (
   </button>
 );
 
-const TicketPurchaseModal = ({ open, onClose, scheduleId, scheduleLabel, onNotify }) => {
+const TicketPurchaseModal = ({ open, onClose, scheduleId, scheduleLabel, route, date, onNotify }) => {
   const [paymentMethod, setPaymentMethod] = useState('wallet');
   const [notes, setNotes] = useState('');
   const [amount, setAmount] = useState(20000);
@@ -67,10 +67,11 @@ const TicketPurchaseModal = ({ open, onClose, scheduleId, scheduleLabel, onNotif
     try {
       setSubmitting(true);
       // 1) Buat tiket pending di TicketService (port 3004)
+      // scheduleId bisa berupa UUID (route.id) atau string, jadi kita gunakan langsung
       const res = await apiClient.post('http://localhost:3004/api/tickets', {
         userId: user.id,
-        scheduleId: Number(scheduleId),
-        scheduleLabel,
+        scheduleId: scheduleId || route?.id || 'schedule-default',
+        scheduleLabel: scheduleLabel || route?.routeName || route?.route_name || 'Rute',
         amount: Number(amount),
         currency: 'IDR'
       });
@@ -80,7 +81,55 @@ const TicketPurchaseModal = ({ open, onClose, scheduleId, scheduleLabel, onNotif
           status: 'success',
           paymentRef: paymentMethod
         });
-        onNotify?.('success', 'Pembayaran berhasil');
+        
+        // 3) Buat schedule setelah pembayaran berhasil
+        if (route) {
+          try {
+            // Ambil bus dan driver pertama yang tersedia
+            const [busesRes, driversRes] = await Promise.all([
+              getBuses().catch(() => ({ success: false, data: [] })),
+              getDrivers().catch(() => ({ success: false, data: [] }))
+            ]);
+            
+            const buses = busesRes.success && busesRes.data && Array.isArray(busesRes.data) ? busesRes.data : [];
+            const drivers = driversRes.success && driversRes.data && Array.isArray(driversRes.data) ? driversRes.data : [];
+            
+            // Gunakan bus dan driver pertama yang tersedia, atau gunakan data default
+            const selectedBus = buses.length > 0 ? buses[0] : { id: 'BUS-001', plate: 'B 1234 CD' };
+            const selectedDriver = drivers.length > 0 ? drivers[0] : { id: 'DRIVER-001', name: 'Driver Default' };
+            
+            // Format waktu: jika ada date, gunakan date + waktu default (09:00), jika tidak gunakan waktu sekarang + 1 jam
+            let scheduleTime;
+            if (date) {
+              scheduleTime = `${date}T09:00`;
+            } else {
+              const now = new Date();
+              now.setHours(now.getHours() + 1);
+              scheduleTime = now.toISOString().slice(0, 16); // format: YYYY-MM-DDTHH:mm
+            }
+            
+            const scheduleData = {
+              routeId: route.id || scheduleId,
+              routeName: route.routeName || route.route_name || scheduleLabel || 'Rute',
+              busId: selectedBus.id,
+              busPlate: selectedBus.plate,
+              driverId: selectedDriver.id,
+              driverName: selectedDriver.name,
+              time: scheduleTime,
+              ticketId: res.data.data.id // simpan ticket id sebagai referensi
+            };
+            
+            await createSchedule(scheduleData);
+            onNotify?.('success', 'Pembayaran berhasil dan jadwal telah ditambahkan');
+          } catch (scheduleError) {
+            console.error('Error creating schedule:', scheduleError);
+            // Tetap tampilkan sukses karena pembayaran sudah berhasil
+            onNotify?.('success', 'Pembayaran berhasil (jadwal gagal ditambahkan)');
+          }
+        } else {
+          onNotify?.('success', 'Pembayaran berhasil');
+        }
+        
         onClose?.();
       } else {
         onNotify?.('error', res.data?.message || 'Gagal membuat tiket');

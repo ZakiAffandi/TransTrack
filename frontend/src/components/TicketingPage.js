@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FiSearch, FiCalendar, FiCreditCard, FiCheckCircle } from 'react-icons/fi';
+import { FiSearch, FiCreditCard, FiCheckCircle } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import TicketPurchaseModal from './TicketPurchaseModal';
 import Toast from './Toast';
@@ -58,6 +58,7 @@ const TicketingPage = () => {
   const [date, setDate] = useState('');
   const [selectedSchedule, setSelectedSchedule] = useState('');
   const [selectedScheduleLabel, setSelectedScheduleLabel] = useState('');
+  const [selectedRoute, setSelectedRoute] = useState(null); // Menyimpan data route lengkap
   const [schedules, setSchedules] = useState([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [scheduleMsg, setScheduleMsg] = useState('');
@@ -84,21 +85,26 @@ const TicketingPage = () => {
       setLoadingSchedules(true);
       setScheduleMsg('');
       const list = await searchSchedules(query.trim());
-      const opts = [{ value: '', label: '-- pilih jadwal --' }].concat(
-        list.map((r, idx) => ({
-          value: String(idx + 1), // gunakan id integer-like untuk schedule
-          label: `${r.route_name || r.routeName || 'Rute'}${date ? ' • ' + date : ''}`
+      // Simpan list routes lengkap untuk referensi
+      const routesList = Array.isArray(list) ? list : [];
+      const opts = [{ value: '', label: '-- pilih jadwal --', route: null }].concat(
+        routesList.map((r, idx) => ({
+          value: r.id || String(idx + 1), // gunakan route id jika ada
+          label: `${r.route_name || r.routeName || 'Rute'}${date ? ' • ' + date : ''}`,
+          route: r // simpan data route lengkap
         }))
       );
       setSchedules(opts);
       if (opts.length > 1) {
         setSelectedSchedule(opts[1].value);
         setSelectedScheduleLabel(opts[1].label);
+        setSelectedRoute(opts[1].route); // simpan route yang dipilih
         setScheduleMsg(`Ditemukan ${opts.length - 1} jadwal.`);
         notify('success', `Berhasil menemukan ${opts.length - 1} jadwal`);
       } else {
         setSelectedSchedule('');
         setSelectedScheduleLabel('');
+        setSelectedRoute(null);
         setScheduleMsg('Tidak ada jadwal yang cocok.');
         notify('warning', 'Tidak ada jadwal yang cocok');
       }
@@ -106,8 +112,9 @@ const TicketingPage = () => {
       const msg = e?.message || 'Gagal mencari jadwal';
       setScheduleMsg(msg);
       notify('error', msg);
-      setSchedules([{ value: '', label: '-- pilih jadwal --' }]);
+      setSchedules([{ value: '', label: '-- pilih jadwal --', route: null }]);
       setSelectedSchedule('');
+      setSelectedRoute(null);
     } finally {
       setLoadingSchedules(false);
     }
@@ -204,6 +211,7 @@ const TicketingPage = () => {
                   setSelectedSchedule(v);
                   const found = schedules.find(s => s.value === v);
                   setSelectedScheduleLabel(found?.label || '');
+                  setSelectedRoute(found?.route || null); // update route yang dipilih
                 }}
                 options={schedules.length ? schedules : [{ value: '', label: '-- pilih jadwal --' }]}
               />
@@ -217,9 +225,6 @@ const TicketingPage = () => {
           <div className="mt-4 flex gap-3">
             <ActionButton onClick={handleOpenPurchase}>
               <FiCreditCard /> Beli Tiket
-            </ActionButton>
-            <ActionButton variant="secondary">
-              <FiCalendar /> Simpan ke Jadwal
             </ActionButton>
           </div>
         </Section>
@@ -284,6 +289,8 @@ const TicketingPage = () => {
         onClose={() => { setPurchaseOpen(false); if (isAuthenticated) loadHistory(); }}
         scheduleId={selectedSchedule}
         scheduleLabel={selectedScheduleLabel}
+        route={selectedRoute}
+        date={date}
         onNotify={notify}
       />
       <Toast open={toast.open} type={toast.type} message={toast.message} onClose={closeToast} />

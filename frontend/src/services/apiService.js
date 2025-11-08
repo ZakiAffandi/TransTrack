@@ -53,11 +53,11 @@ apiClient.interceptors.response.use(
 );
 
 /**
- * Contoh fungsi untuk mengambil data routes
+ * Fungsi untuk mengambil data routes dari RouteService
  */
 export const getRoutes = async () => {
   try {
-    const response = await apiClient.get('/routes');
+    const response = await axios.get('http://localhost:3000/api/routes');
     return response.data;
   } catch (error) {
     console.error('Error fetching routes:', error);
@@ -66,16 +66,74 @@ export const getRoutes = async () => {
 };
 
 /**
- * Contoh fungsi untuk mengambil data buses
+ * Fungsi untuk mengambil data drivers dari DriverService
  */
-export const getBuses = async () => {
+export const getDrivers = async () => {
   try {
-    const response = await apiClient.get('/buses');
+    const response = await axios.get('http://localhost:3001/api/drivers');
     return response.data;
   } catch (error) {
-    console.error('Error fetching buses:', error);
+    console.error('Error fetching drivers:', error);
     throw error;
   }
+};
+
+/**
+ * Fungsi untuk mengambil data maintenance berdasarkan bus ID
+ */
+export const getMaintenanceByBusId = async (busId, status = null) => {
+  try {
+    const params = {};
+    if (status) {
+      params.status = status;
+    }
+    const response = await axios.get(`http://localhost:3003/api/maintenance/bus/${busId}`, { params });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching maintenance:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fungsi untuk mengecek apakah bus sedang dalam maintenance
+ */
+export const checkBusMaintenance = async (busId) => {
+  try {
+    // Cek maintenance dengan status scheduled atau in_progress
+    const [scheduledResponse, inProgressResponse] = await Promise.all([
+      axios.get(`http://localhost:3003/api/maintenance/bus/${busId}`, {
+        params: { status: 'scheduled', limit: 1 }
+      }).catch(() => ({ data: { data: [] } })),
+      axios.get(`http://localhost:3003/api/maintenance/bus/${busId}`, {
+        params: { status: 'in_progress', limit: 1 }
+      }).catch(() => ({ data: { data: [] } }))
+    ]);
+    
+    const scheduled = scheduledResponse.data?.data || [];
+    const inProgress = inProgressResponse.data?.data || [];
+    return scheduled.length > 0 || inProgress.length > 0;
+  } catch (error) {
+    console.error('Error checking bus maintenance:', error);
+    return false;
+  }
+};
+
+/**
+ * Fungsi untuk mengambil data buses (mock data karena belum ada API khusus)
+ * Dalam implementasi nyata, ini bisa diambil dari service khusus atau dari maintenance
+ */
+export const getBuses = async () => {
+  // Untuk sementara, return mock data
+  // Di production, ini harus diambil dari API bus service
+  return {
+    success: true,
+    data: [
+      { id: 'BUS-001', plate: 'B 1234 CD', capacity: 40, status: 'available' },
+      { id: 'BUS-002', plate: 'B 5678 EF', capacity: 35, status: 'available' },
+      { id: 'BUS-003', plate: 'B 9012 GH', capacity: 45, status: 'available' },
+    ]
+  };
 };
 
 /**
@@ -114,11 +172,49 @@ export const validateTicket = async (code) => {
 
 // Schedules (use RouteService as basic listing placeholder)
 export const searchSchedules = async (query) => {
-  const res = await apiClient.get('http://localhost:3000/api/routes');
+  const res = await axios.get('http://localhost:3000/api/routes');
   const data = res.data?.data || res.data || [];
   if (!query) return data;
   const q = String(query).toLowerCase();
   return data.filter((r) => (r.route_name || r.routeName || '').toLowerCase().includes(q));
+};
+
+/**
+ * Fungsi untuk membuat schedule baru
+ * Karena belum ada API khusus untuk schedules, kita simpan di localStorage sementara
+ */
+export const createSchedule = async (scheduleData) => {
+  try {
+    // Untuk sementara, simpan di localStorage
+    // Di production, ini harus dikirim ke API schedule service
+    const schedules = JSON.parse(localStorage.getItem('schedules') || '[]');
+    const newSchedule = {
+      id: Date.now().toString(),
+      ...scheduleData,
+      createdAt: new Date().toISOString()
+    };
+    schedules.push(newSchedule);
+    localStorage.setItem('schedules', JSON.stringify(schedules));
+    return { success: true, data: newSchedule };
+  } catch (error) {
+    console.error('Error creating schedule:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fungsi untuk mengambil semua schedules
+ */
+export const getSchedules = async () => {
+  try {
+    // Untuk sementara, ambil dari localStorage
+    // Di production, ini harus diambil dari API schedule service
+    const schedules = JSON.parse(localStorage.getItem('schedules') || '[]');
+    return { success: true, data: schedules };
+  } catch (error) {
+    console.error('Error fetching schedules:', error);
+    throw error;
+  }
 };
 
 /**
