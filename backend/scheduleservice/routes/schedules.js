@@ -72,9 +72,37 @@ const MAINTENANCE_SERVICE_URL = process.env.MAINTENANCE_SERVICE_URL || 'http://l
  */
 router.get('/', async (req, res) => {
   try {
-    const { routeId, busId, driverId, limit = 100, offset = 0 } = req.query;
-    const limitNum = Number(limit);
-    const offsetNum = Number(offset);
+    const { routeId, busId, driverId, limit, offset } = req.query;
+    
+    // Validasi dan konversi limit dengan lebih ketat
+    let limitNum = 100; // default
+    if (limit !== undefined && limit !== null && limit !== '') {
+      const parsedLimit = parseInt(limit, 10);
+      if (!isNaN(parsedLimit) && parsedLimit > 0) {
+        limitNum = parsedLimit;
+      }
+    }
+    
+    // Validasi dan konversi offset dengan lebih ketat
+    let offsetNum = 0; // default
+    if (offset !== undefined && offset !== null && offset !== '') {
+      const parsedOffset = parseInt(offset, 10);
+      if (!isNaN(parsedOffset) && parsedOffset >= 0) {
+        offsetNum = parsedOffset;
+      }
+    }
+    
+    // Pastikan limitNum dan offsetNum adalah integer yang valid
+    limitNum = Math.floor(limitNum);
+    offsetNum = Math.floor(offsetNum);
+    
+    // Validasi final - pastikan tidak ada NaN
+    if (isNaN(limitNum) || limitNum < 1) {
+      limitNum = 100;
+    }
+    if (isNaN(offsetNum) || offsetNum < 0) {
+      offsetNum = 0;
+    }
 
     const params = [];
     const conditions = [];
@@ -103,6 +131,7 @@ router.get('/', async (req, res) => {
              driver_id AS "driverId",
              driver_name AS "driverName",
              time,
+             estimated_duration_minutes AS "estimatedDurationMinutes",
              ticket_id AS "ticketId",
              created_at AS "createdAt",
              updated_at AS "updatedAt"
@@ -114,7 +143,8 @@ router.get('/', async (req, res) => {
 
     const countSql = `SELECT COUNT(*)::int AS cnt FROM schedules ${whereClause}`;
 
-    params.push(limitNum, offsetNum);
+    // Pastikan limitNum dan offsetNum adalah integer sebelum di-push
+    params.push(Math.floor(limitNum), Math.floor(offsetNum));
 
     const [listResult, countResult] = await Promise.all([
       pool.query(listSql, params),
@@ -190,6 +220,7 @@ router.get('/:id', async (req, res) => {
              driver_id AS "driverId",
              driver_name AS "driverName",
              time,
+             estimated_duration_minutes AS "estimatedDurationMinutes",
              ticket_id AS "ticketId",
              created_at AS "createdAt",
              updated_at AS "updatedAt"
@@ -294,7 +325,7 @@ router.get('/:id', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { routeId, routeName, busId, busPlate, driverId, driverName, time, ticketId } = req.body;
+    const { routeId, routeName, busId, busPlate, driverId, driverName, time, ticketId, estimatedDurationMinutes } = req.body;
 
     if (!routeId || !routeName || !busId || !busPlate || !driverId || !driverName || !time) {
       return res.status(400).json({
@@ -315,8 +346,8 @@ router.post('/', async (req, res) => {
     }
 
     const insertScheduleSql = `
-      INSERT INTO schedules (route_id, route_name, bus_id, bus_plate, driver_id, driver_name, time, ticket_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO schedules (route_id, route_name, bus_id, bus_plate, driver_id, driver_name, time, ticket_id, estimated_duration_minutes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id,
                 route_id AS "routeId",
                 route_name AS "routeName",
@@ -325,6 +356,7 @@ router.post('/', async (req, res) => {
                 driver_id AS "driverId",
                 driver_name AS "driverName",
                 time,
+                estimated_duration_minutes AS "estimatedDurationMinutes",
                 ticket_id AS "ticketId",
                 created_at AS "createdAt",
                 updated_at AS "updatedAt"
@@ -338,7 +370,8 @@ router.post('/', async (req, res) => {
       driverId,
       driverName,
       time,
-      ticketId || null
+      ticketId || null,
+      Number.isFinite(parseInt(estimatedDurationMinutes, 10)) ? parseInt(estimatedDurationMinutes, 10) : null
     ]);
 
     res.status(201).json({
@@ -414,7 +447,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { routeId, routeName, busId, busPlate, driverId, driverName, time, ticketId } = req.body;
+    const { routeId, routeName, busId, busPlate, driverId, driverName, time, ticketId, estimatedDurationMinutes } = req.body;
 
     if (!routeId || !routeName || !busId || !busPlate || !driverId || !driverName || !time) {
       return res.status(400).json({
@@ -454,8 +487,9 @@ router.put('/:id', async (req, res) => {
           driver_name = $6,
           time = $7,
           ticket_id = $8,
+          estimated_duration_minutes = $9,
           updated_at = NOW()
-      WHERE id = $9
+      WHERE id = $10
       RETURNING id,
                 route_id AS "routeId",
                 route_name AS "routeName",
@@ -464,6 +498,7 @@ router.put('/:id', async (req, res) => {
                 driver_id AS "driverId",
                 driver_name AS "driverName",
                 time,
+                estimated_duration_minutes AS "estimatedDurationMinutes",
                 ticket_id AS "ticketId",
                 created_at AS "createdAt",
                 updated_at AS "updatedAt"
@@ -478,6 +513,7 @@ router.put('/:id', async (req, res) => {
       driverName,
       time,
       ticketId || null,
+      Number.isFinite(parseInt(estimatedDurationMinutes, 10)) ? parseInt(estimatedDurationMinutes, 10) : null,
       id
     ]);
 

@@ -291,3 +291,8 @@ export const triggerAssignBuses = async () => {
  */
 export default apiClient;
 
+/**
+ * Export named apiClient untuk penggunaan langsung jika diperlukan
+ */
+export { apiClient };
+

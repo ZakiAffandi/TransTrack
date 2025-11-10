@@ -9,6 +9,8 @@ import TicketingPage from './components/TicketingPage';
 import AccountPage from './pages/AccountPage';
 import TrackPage from './pages/TrackPage';
 import SchedulePage from './pages/SchedulePage';
+import RoutesPage from './pages/RoutesPage';
+import StopsPage from './pages/StopsPage';
 
 function App() {
   return (
@@ -20,6 +22,8 @@ function App() {
             <Route path="/" element={<Homepage />} />
             <Route path="/track" element={<TrackPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
+            <Route path="/routes" element={<RoutesPage />} />
+            <Route path="/stops" element={<StopsPage />} />
             <Route path="/ticket" element={<TicketingPage />} />
             <Route path="/account" element={<AccountPage />} />
           </Routes>

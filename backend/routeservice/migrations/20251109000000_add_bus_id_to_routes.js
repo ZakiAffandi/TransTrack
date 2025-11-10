@@ -6,15 +6,11 @@
  */
 
 exports.up = pgm => {
-  // Tambahkan kolom bus_id (nullable, text karena bus_id dari BusService adalah UUID)
-  pgm.addColumn('routes', {
-    bus_id: {
-      type: 'text',
-      notNull: false,
-    },
-  });
+  pgm.sql(`
+    ALTER TABLE routes
+    ADD COLUMN IF NOT EXISTS bus_id TEXT;
+  `);
 
-  // Tambahkan index untuk performa query berdasarkan bus_id
   pgm.createIndex('routes', ['bus_id'], {
     name: 'routes_bus_id_idx',
     ifNotExists: true,
@@ -23,6 +19,6 @@ exports.up = pgm => {
 
 exports.down = pgm => {
   pgm.dropIndex('routes', 'routes_bus_id_idx', { ifExists: true });
-  pgm.dropColumn('routes', 'bus_id');
+  pgm.sql('ALTER TABLE routes DROP COLUMN IF EXISTS bus_id;');
 };
 

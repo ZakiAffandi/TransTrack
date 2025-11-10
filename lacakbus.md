@@ -12,10 +12,11 @@
 
 ## Overview
 
-**Lacak Bus** adalah fitur yang memungkinkan pengguna untuk melihat posisi real-time bus di peta interaktif. Fitur ini menampilkan:
+**Lacak Bus** adalah fitur yang memungkinkan pengguna untuk melihat posisi bus di peta interaktif dan animasinya bergerak mengikuti jalur jalan (polyline yang di-route-kan). Fitur ini menampilkan:
 - Posisi bus di peta menggunakan koordinat GPS
 - Rute bus dengan garis polyline yang menghubungkan halte-halte
 - Detail bus (model, kapasitas, supir, jadwal, status)
+- Estimasi durasi perjalanan (dari database ScheduleService) dan ETA
 - Informasi lengkap tentang rute dan halte
 
 **Lokasi File:**
@@ -58,7 +59,7 @@ Fitur **Lacak Bus** menggunakan arsitektur microservices dengan **lebih dari 2 l
 
 ### 2. Komunikasi Dinamis Antar Layanan
 
-**API Gateway** melakukan komunikasi dinamis ke **5 layanan berbeda**:
+**API Gateway** melakukan komunikasi dinamis ke **5 layanan berbeda** dan mengagregasi field `schedule.estimatedDurationMinutes`:
 
 #### Langkah 1: Ambil Data Bus dari BusService
 ```javascript
@@ -119,6 +120,7 @@ Gateway melakukan **data aggregation** dengan langkah-langkah berikut:
 - **Error Handling**: Jika salah satu service tidak tersedia, Gateway tetap mengembalikan data dari service yang tersedia
 - **Timeout**: Setiap request memiliki timeout 5 detik untuk mencegah blocking
 - **Fallback**: Jika service tidak tersedia, data tetap ditampilkan dengan informasi yang tersedia
+- **OSRM Rate Limiting**: Frontend memakai antrean, retry, dan cache untuk menghindari 429 saat meminta rute ke `router.project-osrm.org`
 
 ---
 
@@ -131,30 +133,29 @@ Gateway melakukan **data aggregation** dengan langkah-langkah berikut:
 - Tile layer dari OpenStreetMap
 - Responsive dan dapat di-zoom
 
-✅ **Menampilkan Posisi Bus**
-- Marker bus dengan icon custom
-- Animasi pulse pada marker
-- Posisi bus dihitung berdasarkan schedule dan route stops
+✅ **Menampilkan Posisi & Ikon Bus**
+- Marker bus dengan ikon SVG khusus
+- Ikon menghadap kanan (orientasi seragam)
+- Posisi bus dihitung dan dianimasikan di atas polyline rute
 
 ✅ **Menampilkan Rute Bus**
-- Polyline yang menghubungkan halte-halte
-- Warna biru (#008DA6) dengan opacity 0.6
-- Hanya menampilkan route yang memiliki minimal 2 stops
+- Polyline mengikuti jalan (hasil OSRM) dengan cache per-koordinat
+- Fallback ke garis antar-halte bila OSRM gagal
 
-✅ **Detail Bus (Info Panel)**
+✅ **Detail Bus (Info Panel Besar)**
 - Model bus
 - Kapasitas penumpang
 - Nama rute
 - Kode rute
 - Nama supir
 - Kontak supir
-- Jadwal terbaru
+- Jadwal terbaru, Durasi Estimasi (menit), ETA, Sisa Waktu, Sumber Estimasi (DB/OSRM)
 - Status operasi
 
 ✅ **Interaksi User**
-- Klik marker untuk melihat detail bus
+- Klik marker menampilkan popup kecil berisi “Pergerakan: X km/jam”
+- Klik marker juga membuka panel besar dengan detail lengkap
 - Auto-fly ke posisi bus saat dipilih
-- Tutup info panel
 
 ### 2. Stabilitas dan Kecepatan
 
@@ -162,6 +163,7 @@ Gateway melakukan **data aggregation** dengan langkah-langkah berikut:
 - **Error Handling**: Menampilkan pesan error yang user-friendly jika gagal load data
 - **Loading State**: Menampilkan loading indicator saat fetch data
 - **Optimized Rendering**: Hanya render marker dan polyline yang memiliki data valid
+- **Antrean OSRM + Retry**: batasi concurrency, gunakan backoff, dan cache path
 
 ### 3. Tanpa Error
 
@@ -177,6 +179,16 @@ Frontend berhasil memanggil API Gateway dan menampilkan data dari **5 layanan**:
 - ✅ DriverService → Data driver
 - ✅ ScheduleService → Data schedule
 - ✅ MaintenanceService → Data maintenance
+
+---
+
+## Perubahan Terbaru (November 2025)
+
+- Integrasi `estimated_duration_minutes` dari ScheduleService + fallback durasi OSRM
+- ETA dan Sisa Waktu dihitung di frontend dan tampil di panel besar
+- Ikon bus distabilkan (anchor center) dan diseragamkan menghadap kanan
+- Antrian & retry OSRM untuk mencegah 429, plus cache path
+- Animasi “ping‑pong” di sepanjang rute: berangkat dari halte awal ke akhir lalu kembali
 
 ---
 

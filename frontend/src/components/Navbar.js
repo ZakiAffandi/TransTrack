@@ -1,12 +1,43 @@
 import React from 'react';
-import { FiTruck } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { NavLink } from 'react-router-dom';
+
+// Bus Icon SVG Component
+const BusIcon = ({ className, size = 24 }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    {/* Bus Body */}
+    <rect x="2" y="6" width="20" height="12" rx="2" fill="currentColor" opacity="0.1" stroke="currentColor"/>
+    {/* Bus Windows */}
+    <rect x="4" y="8" width="3" height="2.5" rx="0.5" fill="currentColor"/>
+    <rect x="8.5" y="8" width="3" height="2.5" rx="0.5" fill="currentColor"/>
+    <rect x="13" y="8" width="3" height="2.5" rx="0.5" fill="currentColor"/>
+    {/* Bus Door */}
+    <rect x="17" y="9" width="2.5" height="5" rx="0.5" fill="currentColor"/>
+    {/* Bus Wheels */}
+    <circle cx="7" cy="19" r="2" fill="currentColor"/>
+    <circle cx="17" cy="19" r="2" fill="currentColor"/>
+    {/* Bus Front Window */}
+    <rect x="20" y="8" width="1.5" height="4" rx="0.3" fill="currentColor"/>
+  </svg>
+);
 
 const navItems = [
   { label: 'Home', to: '/' },
   { label: 'Lacak Bus', to: '/track' },
   { label: 'Jadwal', to: '/schedule' },
+  { label: 'Daftar Rute', to: '/routes' },
+  { label: 'Daftar Halte', to: '/stops' },
   { label: 'Beli Tiket', to: '/ticket' }
 ];
 
@@ -19,7 +50,7 @@ const Navbar = () => {
         <div className="flex items-center justify-between py-4">
           {/* Brand */}
           <a href="/" className="flex items-center gap-2">
-            <FiTruck className="text-primary" size={24} />
+            <BusIcon className="text-primary" size={24} />
             <span className="font-semibold text-lg text-primary">TransTrack</span>
           </a>
 

@@ -96,13 +96,32 @@ git clone https://github.com/DevZkafnd/TransTrack.git
 cd TransTrack
 ```
 
-2) Jalankan semua service + frontend (auto install deps + migrate semua service):
+2) Checklist Fresh Clone (tanpa error koneksi/migrasi)
+
+```bash
+# 2.1 Install deps root
+npm i
+
+# 2.2 Siapkan .env tiap service (salin env.example -> .env, set DB_HOST/PORT/NAME/USER/PASSWORD)
+#    Ulangi untuk semua folder di backend/*service
+
+# 2.3 Migrasi database per service (idempotent, aman diulang)
+cd backend/userservice && npm i && npm run migrate && cd ../../..
+cd backend/driverservice && npm i && npm run migrate && cd ../../..
+cd backend/maintenanceservice && npm i && npm run migrate && cd ../../..
+cd backend/busservice && npm i && npm run migrate && cd ../../..
+cd backend/scheduleservice && npm i && npm run migrate && cd ../../..
+cd backend/routeservice && npm i && npm run migrate && cd ../../..
+cd backend/gatewayservice && npm i && cd ../../..
+```
+
+3) Jalankan semua service + frontend (auto):
 
 ```bash
 npm run dev
 ```
 
-3) Buka aplikasi dan dokumentasi:
+4) Buka aplikasi dan dokumentasi:
 
 - Frontend (React): `http://localhost:4000`
 - **GatewayService Swagger**: `http://localhost:8000/api-docs` (Entry point tunggal)
@@ -113,13 +132,13 @@ npm run dev
 - TicketService Swagger: `http://localhost:3004/api-docs`
 - ScheduleService Swagger: `http://localhost:3005/api-docs`
 
-4) Variabel lingkungan (.env) per service
+5) Variabel lingkungan (.env) per service
 
 - Salin `env.example` → `.env` di setiap folder service dalam `backend/*service/` lalu sesuaikan koneksi PostgreSQL.
 - Untuk frontend, Anda tidak wajib mengubah `.env` saat pengembangan: klien otomatis menggunakan GatewayService di `http://localhost:8000/api` (default).
 - GatewayService mengkonfigurasi URL semua service melalui environment variables (lihat `backend/gatewayservice/env.example`).
 
-5) Login/Daftar & Pembelian Tiket
+6) Login/Daftar & Pembelian Tiket
 
 - Gunakan modal login/daftar dari frontend (menyambung ke `UserService` via GatewayService).
 - Halaman pembelian tiket ada di `/ticket`. Saat "Bayar Sekarang":
@@ -128,14 +147,15 @@ npm run dev
   - **TicketService memvalidasi user dengan memanggil UserService** (inter-service communication)
   - Jika user valid, tiket dibuat dan ditandai success
 
-6) Troubleshooting umum
+7) Troubleshooting umum
 
 - Port bentrok → hentikan proses lama (Windows PowerShell: `netstat -ano | findstr :<PORT>` lalu kill PID) atau ubah `PORT` di `.env` service terkait.
 - Connection refused ke API → pastikan service tujuan up (cek `/health`) dan base URL frontend sesuai (frontend fallback otomatis ke 3002 untuk user saat dev).
-- Tabel database hilang → jalankan ulang `npm run dev` (script `predev` akan menjalankan migrasi semua service otomatis).
-- Atau jalankan `npm run setup` untuk install dependencies + migrasi semua service.
+- Tabel database hilang → jalankan migrasi service terkait (`npm run migrate` di folder service).
+- Jika pernah memakai tabel migrasi lama `pgmigrations` generik dan tidak dipakai lagi, Anda boleh menghapusnya: `DROP TABLE IF EXISTS pgmigrations;`
+- OSRM routing 429: frontend sudah memakai antrian + retry + cache; tunggu beberapa detik atau zoom region lain.
 
-7) Repository
+8) Repository
 
 - GitHub: `https://github.com/DevZkafnd/TransTrack.git`
 
@@ -378,10 +398,11 @@ Semua services menggunakan database PostgreSQL yang sama (`transtrack_db`), teta
 
 | Service | Migration Table |
 |---------|----------------|
-| RouteService | `pgmigrations` |
+| RouteService | `pgmigrations_routeservice` |
 | DriverService | `pgmigrations_driver` |
 | UserService | `pgmigrations_user` |
 | MaintenanceService | `pgmigrations_maintenance` |
+| ScheduleService | `pgmigrations_schedules` |
 
 ### 🗄️ Tabel Utama
 

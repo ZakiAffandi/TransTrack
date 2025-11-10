@@ -317,7 +317,7 @@ router.get('/dashboard/operating-buses', async (req, res) => {
           // Ambil schedules untuk sync bus_id
           const schedules = scheduleResponse.data?.data || [];
           
-          // Fallback: coba ambil dari schedule jika route tidak ditemukan
+            // Fallback: coba ambil dari schedule jika route tidak ditemukan
           // Dan sync bus_id dari schedule ke routes table
           if (routeName === '-' && routeCode === '-') {
             if (schedules.length > 0) {
@@ -675,6 +675,7 @@ router.get('/dashboard/tracking', async (req, res) => {
             schedule: schedule ? {
               id: schedule.id,
               time: schedule.time,
+              estimatedDurationMinutes: schedule.estimatedDurationMinutes || schedule.estimated_duration_minutes || null,
               routeName: schedule.routeName || schedule.route_name || '-',
               routeCode: schedule.routeCode || schedule.route_code || '-'
             } : null,

@@ -67,6 +67,6 @@ module.exports = {
     password: pass,
     ssl,
   },
-  migrationsTable: 'pgmigrations',
+  migrationsTable: 'pgmigrations_routeservice',
   schema, // ekspor schema agar node-pg-migrate membaca
 };

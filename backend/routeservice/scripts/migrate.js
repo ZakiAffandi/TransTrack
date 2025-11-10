@@ -28,7 +28,7 @@ console.log('ℹ️  Catatan: Peringatan "Can\'t determine timestamp" adalah nor
 try {
   // Capture output and filter warnings
   const output = execSync(
-    `node -r dotenv/config ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up --config ./config/migration.config.js --schema ${schema}`,
+    `node -r dotenv/config ./node_modules/node-pg-migrate/bin/node-pg-migrate.js up --config ./config/migration.config.js --schema ${schema} --migrations-table pgmigrations_routeservice --dir ./migrations`,
     { 
       encoding: 'utf8',
       cwd: require('path').resolve(__dirname, '..'),
