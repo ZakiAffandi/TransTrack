@@ -44,8 +44,12 @@ const validateUser = async (userId) => {
  *                 type: string
  *               scheduleId:
  *                 type: string
+ *               scheduleLabel:
+ *                 type: string
+ *                 description: Label jadwal untuk riwayat pengguna (maks 160 karakter)
  *               amount:
  *                 type: number
+ *                 description: Harga tiket (0 - 9,999,999,999.99)
  *               currency:
  *                 type: string
  *                 example: IDR
@@ -55,10 +59,51 @@ const validateUser = async (userId) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { userId, scheduleId, scheduleLabel, amount, currency = 'IDR' } = req.body;
-    if (!userId || !scheduleId || !amount) {
-      return res.status(400).json({ success: false, error: 'Kesalahan validasi', message: 'userId, scheduleId, amount wajib diisi' });
+    const { userId, scheduleId } = req.body;
+    let { scheduleLabel, amount, currency = 'IDR' } = req.body;
+
+    // Validasi field wajib
+    if (!userId || !scheduleId || amount == null) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kesalahan validasi',
+        message: 'userId, scheduleId, dan amount wajib diisi'
+      });
     }
+
+    // Normalisasi dan validasi scheduleLabel (opsional, batasi panjang agar aman)
+    if (typeof scheduleLabel === 'string') {
+      scheduleLabel = scheduleLabel.trim().slice(0, 160);
+    } else {
+      scheduleLabel = null;
+    }
+
+    // Validasi currency (default IDR, 3 huruf kapital)
+    if (typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)) {
+      currency = 'IDR';
+    }
+
+    // Validasi amount terhadap tipe NUMERIC(12,2)
+    const rawAmount = Number(amount);
+    if (!Number.isFinite(rawAmount)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kesalahan validasi',
+        message: 'amount harus berupa angka yang valid'
+      });
+    }
+    // Batas maksimum untuk NUMERIC(12,2): < 10^10 (9,999,999,999.99)
+    const MAX_AMOUNT = 9999999999.99;
+    const MIN_AMOUNT = 0;
+    if (rawAmount < MIN_AMOUNT || rawAmount > MAX_AMOUNT) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kesalahan validasi',
+        message: 'amount berada di luar rentang yang diizinkan (0 - 9,999,999,999.99)'
+      });
+    }
+    // Bulatkan ke 2 desimal untuk menjaga konsistensi dengan skala kolom
+    const normalizedAmount = Math.round(rawAmount * 100) / 100;
 
     // Validasi user dengan memanggil UserService
     let user;
@@ -87,11 +132,29 @@ router.post('/', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, 'pending')
       RETURNING *
     `;
-    const result = await pool.query(sql, [userId, String(scheduleId), scheduleLabel || null, amount, currency]);
+    const result = await pool.query(sql, [
+      userId,
+      String(scheduleId),
+      scheduleLabel,
+      normalizedAmount,
+      currency
+    ]);
     return res.status(201).json({ success: true, data: result.rows[0] });
   } catch (e) {
     console.error('Gagal membuat tiket:', e);
-    res.status(500).json({ success: false, error: 'Kesalahan server internal', message: e.message || 'Gagal membuat tiket' });
+    // Mapping error Postgres numeric range ke 400 agar user mendapat pesan jelas
+    if (e && (e.code === '22003' || /numeric/i.test(e.message))) {
+      return res.status(400).json({
+        success: false,
+        error: 'Kesalahan validasi',
+        message: 'Jumlah (amount) terlalu besar. Maksimal 9,999,999,999.99'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'Kesalahan server internal',
+      message: e.message || 'Gagal membuat tiket'
+    });
   }
 });
 

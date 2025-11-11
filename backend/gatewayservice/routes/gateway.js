@@ -419,6 +419,199 @@ router.get('/dashboard/operating-buses', async (req, res) => {
   }
 });
 
+const toYMD = (d) => {
+  const dt = typeof d === 'string' ? new Date(d) : d;
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const toYMDUTC = (iso) => {
+  if (!iso) return '';
+  const dt = new Date(iso);
+  const y = dt.getUTCFullYear();
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(dt.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+/**
+ * @swagger
+ * /api/schedules/ensure-for-date:
+ *   post:
+ *     summary: Pastikan setiap rute memiliki minimal satu jadwal pada tanggal tertentu (kecuali libur nasional dan bus maintenance)
+ *     tags: [Schedules]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               date:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-11-15"
+ *               routeId:
+ *                 type: string
+ *                 description: Jika diisi, hanya memastikan jadwal untuk rute tersebut
+ *                 example: "550e8400-e29b-41d4-a716-446655440000"
+ *               times:
+ *                 type: array
+ *                 description: Daftar jam keberangkatan (format HH:mm, waktu lokal)
+ *                 items:
+ *                   type: string
+ *                   example: "09:00"
+ *                 example: ["09:00"]
+ *     responses:
+ *       200:
+ *         description: Proses ensure selesai
+ */
+router.post('/schedules/ensure-for-date', async (req, res) => {
+  try {
+    const { date, times, routeId: targetRouteId } = req.body || {};
+    if (!date) {
+      return res.status(400).json({ success: false, message: 'Field date (YYYY-MM-DD) wajib diisi' });
+    }
+    const ymd = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : toYMD(date);
+    // Cek hari libur via ScheduleService (DB)
+    const holidayResp = await safeAxiosGet(`${SCHEDULE_SERVICE_URL}/api/holidays?date=${encodeURIComponent(ymd)}`, { timeout: 3000 });
+    const holidays = holidayResp && holidayResp.status === 200 ? holidayResp.data?.data || [] : [];
+    if (holidays.length > 0) {
+      return res.json({ success: true, ensured: [], skipped: 'holiday', message: 'Tanggal adalah hari libur (DB)' });
+    }
+
+    let routes = [];
+    if (targetRouteId) {
+      const routeResp = await safeAxiosGet(`${ROUTE_SERVICE_URL}/api/routes/${encodeURIComponent(targetRouteId)}`, { timeout: 5000 });
+      if (routeResp && routeResp.status === 200) {
+        const data = routeResp.data?.data;
+        if (data) routes = [data];
+      }
+      if (routes.length === 0) {
+        return res.status(404).json({ success: false, message: `Route ${targetRouteId} tidak ditemukan` });
+      }
+    } else {
+      const routesResp = await safeAxiosGet(`${ROUTE_SERVICE_URL}/api/routes?limit=1000`, { timeout: 5000 });
+      routes = routesResp && routesResp.status === 200 ? routesResp.data?.data || [] : [];
+    }
+
+    const ensured = [];
+    const skipped = [];
+    // Ambil times dari template DB per rute jika ada; jika body.times diberikan, gunakan itu.
+    const globalTimes = Array.isArray(times) && times.length > 0 ? times : null;
+
+    for (const route of routes) {
+      try {
+        const routeId = route.id || route.routeId || targetRouteId;
+        const routeName = route.routeName || route.route_name || route.description || 'Rute';
+        const busId = route.busId || route.bus_id || null;
+
+        // Skip jika bus maintenance in_progress
+        // Tidak lagi skip karena maintenance; jadwal tetap dibuat
+
+        // Cek apakah sudah ada jadwal pada tanggal tsb
+        const existResp = await safeAxiosGet(`${SCHEDULE_SERVICE_URL}/api/schedules?routeId=${encodeURIComponent(routeId)}&limit=200`, { timeout: 5000 });
+        const existing = existResp && existResp.status === 200 ? existResp.data?.data || [] : [];
+        const existsForDate = existing.some((s) => s.time && toYMDUTC(s.time) === ymd);
+        if (existsForDate) {
+          skipped.push({ routeId, reason: 'exists' });
+          continue;
+        }
+
+        // Ambil driver dari DriverService berdasarkan busId (opsional)
+        let driverId = null;
+        let driverName = null;
+        let busPlate = null;
+        if (busId) {
+          // Bus plate dari BusService
+          const busResp = await safeAxiosGet(`${BUS_SERVICE_URL}/api/buses?limit=1&busId=${encodeURIComponent(busId)}`, { timeout: 3000 });
+          const busList = busResp && busResp.status === 200 ? busResp.data?.data || [] : [];
+          if (busList.length > 0) busPlate = busList[0].plate || null;
+          const drvResp = await safeAxiosGet(`${DRIVER_SERVICE_URL}/api/drivers?busId=${encodeURIComponent(busId)}&limit=1`, { timeout: 3000 });
+          const drivers = drvResp && drvResp.status === 200 ? drvResp.data?.data || [] : [];
+          if (drivers.length > 0) {
+            driverId = drivers[0].id || null;
+            driverName = drivers[0].name || drivers[0].driverName || null;
+          }
+        }
+
+        // Ambil times spesifik rute dari ScheduleService
+        let timeSlots = globalTimes;
+        if (!timeSlots) {
+          const tmplResp = await safeAxiosGet(`${SCHEDULE_SERVICE_URL}/api/schedule-templates?routeId=${encodeURIComponent(routeId)}`, { timeout: 3000 });
+          const templates = tmplResp && tmplResp.status === 200 ? tmplResp.data?.data || [] : [];
+          if (templates.length > 0 && Array.isArray(templates[0].times)) {
+            timeSlots = templates[0].times;
+          } else {
+            // fallback default waktu jika template tidak ada
+            timeSlots = ['09:00'];
+          }
+        }
+
+        // Buat satu jadwal pada jam pertama yang tersedia (bus/driver opsional)
+        for (const hhmm of timeSlots) {
+          const [hh, mm] = String(hhmm).split(':');
+          // Buat ISO time lokal (anggap waktu lokal sebagai UTC untuk kesederhanaan)
+          const iso = `${ymd}T${String(hh).padStart(2, '0')}:${String(mm || '00').padStart(2, '0')}:00Z`;
+          const payload = {
+            routeId,
+            routeName,
+            busId: busId || null,
+            busPlate: busPlate || null,
+            driverId: driverId || null,
+            driverName: driverName || null,
+            time: iso,
+            estimatedDurationMinutes: 90
+          };
+          const createResp = await safeAxiosGet(`${SCHEDULE_SERVICE_URL}/api/schedules`, {
+            method: 'POST',
+            timeout: 5000,
+            data: payload
+          });
+          if (createResp && createResp.status >= 200 && createResp.status < 300) {
+            ensured.push({ routeId, time: iso });
+            // Satu jadwal per rute sudah cukup untuk kebutuhan pencarian
+            break;
+          } else if (createResp && createResp.status >= 400) {
+            // Log error dari ScheduleService
+            const errorMsg = createResp.data?.message || createResp.data?.error || `HTTP ${createResp.status}`;
+            console.error(`[Gateway] Error creating schedule for route ${routeId}:`, errorMsg);
+            skipped.push({ routeId, reason: `create_failed: ${errorMsg}` });
+            break; // Stop trying other time slots for this route
+          }
+        }
+      } catch (e) {
+        // Skip route bila error
+        const errorMsg = e.message || e.toString() || 'unknown_error';
+        console.error(`[Gateway] Error processing route ${route?.id || route?.routeId || targetRouteId}:`, errorMsg);
+        skipped.push({ routeId: route?.id || route?.routeId || targetRouteId || null, reason: errorMsg });
+      }
+    }
+
+    // Jika tidak ada route yang diproses, return warning tapi tetap success
+    if (routes.length === 0) {
+      return res.json({ 
+        success: true, 
+        ensured: [], 
+        skipped: [], 
+        date: ymd,
+        message: 'Tidak ada rute yang ditemukan untuk diproses'
+      });
+    }
+
+    res.json({ success: true, ensured, skipped, date: ymd });
+  } catch (error) {
+    console.error('[Gateway] Error in ensure-for-date:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Gagal ensure schedules',
+      error: error.toString()
+    });
+  }
+});
+
 /**
  * @swagger
  * /api/schedules:

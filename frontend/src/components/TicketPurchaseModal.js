@@ -54,6 +54,18 @@ const TicketPurchaseModal = ({ open, onClose, scheduleId, scheduleLabel, route, 
 
   if (!open) return null;
 
+  // Konstanta validasi amount mengikuti NUMERIC(12,2) di database
+  const MIN_AMOUNT = 0;
+  const MAX_AMOUNT = 9999999999.99; // 9,999,999,999.99
+
+  const clampAmount = (v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '';
+    if (n < MIN_AMOUNT) return MIN_AMOUNT;
+    if (n > MAX_AMOUNT) return MAX_AMOUNT;
+    return Math.round(n * 100) / 100;
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     // Validasi: scheduleId wajib ada (schedule harus dipilih dari database)
@@ -63,6 +75,16 @@ const TicketPurchaseModal = ({ open, onClose, scheduleId, scheduleLabel, route, 
     }
     if (!user?.id) {
       onNotify?.('error', 'Anda belum login. Silakan login terlebih dahulu.');
+      return;
+    }
+    // Validasi amount
+    const normalizedAmount = clampAmount(amount);
+    if (normalizedAmount === '' || !Number.isFinite(Number(normalizedAmount))) {
+      onNotify?.('error', 'Harga tidak valid.');
+      return;
+    }
+    if (normalizedAmount < 1000) {
+      onNotify?.('warning', 'Harga minimal Rp 1.000');
       return;
     }
     try {
@@ -75,7 +97,7 @@ const TicketPurchaseModal = ({ open, onClose, scheduleId, scheduleLabel, route, 
         userId: user.id,
         scheduleId: scheduleId, // ID schedule dari database (wajib ada)
         scheduleLabel: scheduleLabel || route?.routeName || route?.route_name || 'Rute',
-        amount: Number(amount),
+        amount: Number(normalizedAmount),
         currency: 'IDR'
       });
       
@@ -120,7 +142,13 @@ const TicketPurchaseModal = ({ open, onClose, scheduleId, scheduleLabel, route, 
           <p className="text-textSecondary mb-4">Isi detail berikut untuk melanjutkan pembelian.</p>
           <form className="space-y-4" onSubmit={onSubmit}>
             <Field label="Harga (IDR)">
-              <TextInput type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <TextInput
+                type="number"
+                min={0}
+                step="100"
+                value={amount}
+                onChange={(e) => setAmount(clampAmount(e.target.value))}
+              />
             </Field>
             <Field label="Metode Pembayaran">
               <Select

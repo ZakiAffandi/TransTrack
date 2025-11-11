@@ -3,6 +3,8 @@ const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const schedulesRouter = require('./routes/schedules');
+const holidaysRouter = require('./routes/holidays');
+const templatesRouter = require('./routes/templates');
 require('dotenv').config();
 
 const app = express();
@@ -55,6 +57,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
 
 // API Routes
 app.use('/api/schedules', schedulesRouter);
+app.use('/api/holidays', holidaysRouter);
+app.use('/api/schedule-templates', templatesRouter);
 
 // Root endpoint
 app.get('/', (req, res) => {

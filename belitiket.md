@@ -43,7 +43,7 @@ Fitur **Beli Tiket** menggunakan arsitektur microservices dengan **lebih dari 2 
        │ GET /api/tickets/validate/:code
        ▼
 ┌─────────────────────────────────────────────────┐
-│           API Gateway (Port 3007)               │
+│           API Gateway (Port 8000)               │
 │  ┌───────────────────────────────────────────┐  │
 │  │  Proxy to multiple services              │  │
 │  └───────────────────────────────────────────┘  │
@@ -64,7 +64,7 @@ Fitur **Beli Tiket** menggunakan arsitektur microservices dengan **lebih dari 2 
 
 #### Langkah 1: Pencarian Jadwal (ScheduleService)
 ```javascript
-GET http://localhost:3007/api/schedules
+GET http://localhost:8000/api/schedules
 ```
 - **Service**: ScheduleService (Port 3005) via Gateway
 - **Method**: GET
@@ -78,7 +78,7 @@ Frontend → Gateway → ScheduleService
 
 #### Langkah 2: Pembuatan Tiket (TicketService → UserService)
 ```javascript
-POST http://localhost:3007/api/tickets
+POST http://localhost:8000/api/tickets
 Body: {
   "userId": "user-id-123",
   "scheduleId": "schedule-id-456",
@@ -122,7 +122,7 @@ Body: {
 
 #### Langkah 4: Validasi Tiket
 ```javascript
-GET http://localhost:3007/api/tickets/validate/:code
+GET http://localhost:8000/api/tickets/validate/:code
 ```
 - **Service**: TicketService (Port 3004) via Gateway
 - **Method**: GET
@@ -130,7 +130,7 @@ GET http://localhost:3007/api/tickets/validate/:code
 
 #### Langkah 5: Riwayat Tiket User
 ```javascript
-GET http://localhost:3007/api/tickets?userId=:userId
+GET http://localhost:8000/api/tickets?userId=:userId
 ```
 - **Service**: TicketService (Port 3004) via Gateway
 - **Method**: GET
@@ -260,7 +260,7 @@ Frontend berhasil memanggil API Gateway dan menampilkan data dari **4 layanan**:
 
 **Swagger Documentation** tersedia di:
 ```
-http://localhost:3007/api-docs
+http://localhost:8000/api-docs
 http://localhost:3004/api-docs (TicketService)
 http://localhost:3005/api-docs (ScheduleService)
 ```
@@ -272,7 +272,7 @@ http://localhost:3005/api-docs (ScheduleService)
 **Request:**
 ```http
 GET /api/schedules
-Host: localhost:3007
+Host: localhost:8000
 ```
 
 **Response Success (200):**
@@ -297,7 +297,7 @@ Host: localhost:3007
 **Request:**
 ```http
 POST /api/tickets
-Host: localhost:3007
+Host: localhost:8000
 Content-Type: application/json
 
 {
@@ -350,7 +350,7 @@ Content-Type: application/json
 **Request:**
 ```http
 PATCH /api/tickets/ticket-id-789
-Host: localhost:3007
+Host: localhost:8000
 Content-Type: application/json
 
 {
@@ -377,7 +377,7 @@ Content-Type: application/json
 **Request:**
 ```http
 GET /api/tickets/validate/TKT-20240115-001
-Host: localhost:3007
+Host: localhost:8000
 ```
 
 **Response Success (200):**
@@ -650,7 +650,7 @@ GET http://localhost:3007/api/tickets?userId=user-id-123
 
 1. **Buka aplikasi frontend:**
    ```
-   http://localhost:3000
+http://localhost:4000
    ```
 
 2. **Navigasi ke halaman "Beli Tiket"**

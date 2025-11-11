@@ -198,6 +198,23 @@ export const getSchedules = async (params = {}) => {
 };
 
 /**
+ * Pastikan setiap rute memiliki minimal satu jadwal pada tanggal tertentu.
+ * Menggunakan endpoint Gateway: POST /schedules/ensure-for-date
+ */
+export const ensureSchedulesForDate = async ({ date, routeId, times = null }) => {
+  try {
+    const payload = { date };
+    if (routeId) payload.routeId = routeId;
+    if (Array.isArray(times) && times.length > 0) payload.times = times;
+    const res = await apiClient.post('/schedules/ensure-for-date', payload);
+    return res.data;
+  } catch (error) {
+    // Jangan spam console dan jangan blokir alur UI; lanjut fetch jadwal biasa
+    return { success: false, message: 'Gagal menyiapkan jadwal otomatis (akan dicoba lagi).' };
+  }
+};
+
+/**
  * Fungsi untuk mengambil schedule berdasarkan ID (via Gateway)
  */
 export const getScheduleById = async (id) => {

@@ -327,11 +327,12 @@ router.post('/', async (req, res) => {
   try {
     const { routeId, routeName, busId, busPlate, driverId, driverName, time, ticketId, estimatedDurationMinutes } = req.body;
 
-    if (!routeId || !routeName || !busId || !busPlate || !driverId || !driverName || !time) {
+    // Hanya wajib: routeId, routeName, time. Bus/driver opsional (nullable).
+    if (!routeId || !routeName || !time) {
       return res.status(400).json({
         success: false,
         error: 'Kesalahan validasi',
-        message: 'routeId, routeName, busId, busPlate, driverId, driverName, dan time wajib diisi'
+        message: 'routeId, routeName, dan time wajib diisi'
       });
     }
 
@@ -365,10 +366,10 @@ router.post('/', async (req, res) => {
     const scheduleResult = await pool.query(insertScheduleSql, [
       routeId,
       routeName,
-      busId,
-      busPlate,
-      driverId,
-      driverName,
+      busId || null,
+      busPlate || null,
+      driverId || null,
+      driverName || null,
       time,
       ticketId || null,
       Number.isFinite(parseInt(estimatedDurationMinutes, 10)) ? parseInt(estimatedDurationMinutes, 10) : null

@@ -3,7 +3,7 @@ import { FiSearch, FiCreditCard, FiCheckCircle } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import TicketPurchaseModal from './TicketPurchaseModal';
 import Toast from './Toast';
-import { searchSchedules, getUserTickets, validateTicket } from '../services/apiService';
+import { getRoutes, getSchedules, getUserTickets, validateTicket, ensureSchedulesForDate } from '../services/apiService';
 
 const Section = ({ title, description, children }) => (
   <div className="bg-white rounded-xl shadow-sm p-6">
@@ -56,77 +56,269 @@ const ActionButton = ({ children, variant = 'primary', ...props }) => {
 const TicketingPage = () => {
   const [query, setQuery] = useState('');
   const [date, setDate] = useState('');
-  const [selectedSchedule, setSelectedSchedule] = useState('');
-  const [selectedScheduleLabel, setSelectedScheduleLabel] = useState('');
-  const [selectedRoute, setSelectedRoute] = useState(null); // Menyimpan data schedule lengkap (dari database)
-  const [schedules, setSchedules] = useState([]);
+  // Rute
+  const [routes, setRoutes] = useState([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [routesMsg, setRoutesMsg] = useState('');
+  const [selectedRouteId, setSelectedRouteId] = useState('');
+  const [selectedRouteData, setSelectedRouteData] = useState(null);
+  // Jadwal
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [scheduleMsg, setScheduleMsg] = useState('');
+  const [selectedSchedule, setSelectedSchedule] = useState('');
+  const [selectedScheduleLabel, setSelectedScheduleLabel] = useState('');
 
   const [ticketCode, setTicketCode] = useState('');
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [validating, setValidating] = useState(false);
-  const { requireAuth, isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, openLogin, isAuthModalOpen } = useAuth();
+  const [pendingOpenPurchase, setPendingOpenPurchase] = useState(false);
   const [toast, setToast] = useState({ open: false, type: 'info', message: '' });
 
   const notify = (type, message) => setToast({ open: true, type, message });
   const closeToast = () => setToast((t) => ({ ...t, open: false }));
 
-  const handleSearchSchedules = async () => {
+  const handleSearchRoutes = async () => {
     if (!query || query.trim().length < 2) {
-      setScheduleMsg('Masukkan minimal 2 karakter untuk pencarian.');
-      setSchedules([{ value: '', label: '-- pilih jadwal --' }]);
+      setRoutesMsg('Masukkan minimal 2 karakter untuk pencarian rute.');
+      setRoutes([{ value: '', label: '-- pilih rute --' }]);
+      setSelectedRouteId('');
+      setSelectedRouteData(null);
       setSelectedSchedule('');
+      return;
+    }
+    try {
+      setLoadingRoutes(true);
+      setRoutesMsg('');
+      const res = await getRoutes();
+      const data = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+      const q = query.trim().toLowerCase();
+      const filtered = data.filter((r) => {
+        const name = (r.routeName || r.route_name || '').toLowerCase();
+        const code = (r.routeCode || r.route_code || '').toLowerCase();
+        const desc = (r.description || '').toLowerCase();
+        return name.includes(q) || code.includes(q) || desc.includes(q);
+      });
+      const opts = [{ value: '', label: '-- pilih rute --', route: null }].concat(
+        filtered.map((r) => ({
+          value: r.id,
+          label: `${r.routeName || r.route_name || 'Rute'}${r.routeCode ? ` (${r.routeCode})` : ''}`,
+          route: r,
+        }))
+      );
+      setRoutes(opts);
+      if (opts.length > 1) {
+        setRoutesMsg(`Ditemukan ${opts.length - 1} rute.`);
+        notify('success', `Berhasil menemukan ${opts.length - 1} rute`);
+      } else {
+        setRoutesMsg('Tidak ada rute yang cocok.');
+        notify('warning', 'Tidak ada rute yang cocok');
+      }
+    } catch (e) {
+      const msg = e?.message || 'Gagal mencari rute';
+      setRoutesMsg(msg);
+      notify('error', msg);
+      setRoutes([{ value: '', label: '-- pilih rute --', route: null }]);
+      setSelectedRouteId('');
+      setSelectedRouteData(null);
+      setSelectedSchedule('');
+    } finally {
+      setLoadingRoutes(false);
+    }
+  };
+
+  // Helper untuk normalisasi tanggal (YYYY-MM-DD)
+  const toYMD = (d) => {
+    if (!d) return '';
+    const dt = typeof d === 'string' ? new Date(d) : d;
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // Helper untuk normalisasi tanggal dari ISO UTC (YYYY-MM-DD, UTC)
+  const toYMDUTC = (iso) => {
+    if (!iso) return '';
+    const dt = new Date(iso);
+    const y = dt.getUTCFullYear();
+    const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(dt.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // Helper untuk normalisasi tanggal dari ISO ke tanggal lokal (YYYY-MM-DD, Local Time)
+  const toYMDLocal = (iso) => {
+    if (!iso) return '';
+    const dt = new Date(iso); // gunakan zona waktu lokal
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const loadSchedulesForRoute = async (routeId, routeDetails = null) => {
+    if (!routeId) {
+      setSelectedSchedule('');
+      setSelectedScheduleLabel('');
+      setScheduleMsg('');
       return;
     }
     try {
       setLoadingSchedules(true);
       setScheduleMsg('');
-      const list = await searchSchedules(query.trim());
-      // Simpan list schedules lengkap untuk referensi
-      // Schedule sudah ada di database (seperti jadwal penerbangan)
-      const schedulesList = Array.isArray(list) ? list : [];
-      const opts = [{ value: '', label: '-- pilih jadwal --', schedule: null }].concat(
-        schedulesList.map((s) => ({
-          value: s.id, // gunakan schedule id dari database
-          label: `${s.routeName || s.route_name || 'Rute'} - ${s.busPlate || s.bus || 'Bus'} - ${s.driverName || s.driver || 'Driver'}`,
-          schedule: s // simpan data schedule lengkap
-        }))
-      );
-      setSchedules(opts);
-      if (opts.length > 1) {
-        setSelectedSchedule(opts[1].value);
-        setSelectedScheduleLabel(opts[1].label);
-        setSelectedRoute(opts[1].schedule); // simpan schedule yang dipilih (dari database)
-        setScheduleMsg(`Ditemukan ${opts.length - 1} jadwal.`);
-        notify('success', `Berhasil menemukan ${opts.length - 1} jadwal`);
+      let ensureInfo = null;
+      let ensureMessage = '';
+      
+      // Tentukan tanggal target: gunakan tanggal yang dipilih, atau hari ini jika belum dipilih
+      const targetDate = date || toYMD(new Date());
+      
+      // Pastikan jadwal tersedia untuk tanggal target (hari ini, besok, lusa jika belum ada tanggal)
+      if (!date) {
+        // Jika belum ada tanggal dipilih, buat jadwal untuk hari ini, besok, dan lusa
+        const today = new Date();
+        const dates = [
+          toYMD(today),
+          toYMD(new Date(today.getTime() + 24 * 60 * 60 * 1000)), // besok
+          toYMD(new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000)) // lusa
+        ];
+        
+        for (const d of dates) {
+          const info = await ensureSchedulesForDate({ date: d, routeId }).catch(() => null);
+          if (info?.message && !ensureMessage) {
+            ensureMessage = info.message;
+          }
+        }
+        // Beri jeda lebih lama untuk multiple requests
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } else {
+        // Jika tanggal sudah dipilih, buat jadwal untuk tanggal tersebut
+        ensureInfo = await ensureSchedulesForDate({ date: targetDate, routeId }).catch(() => null);
+        if (ensureInfo?.message) {
+          ensureMessage = ensureInfo.message;
+        }
+        // Beri jeda singkat agar schedule service menyelesaikan insert
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      const fetchSchedules = async () => {
+        // Pertama: minta langsung ke server dengan routeId (lebih efisien)
+        let res = await getSchedules({ routeId, limit: 1000 });
+        let raw = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+
+        // Fallback: jika kosong, ambil semua lalu filter di sisi klien berdasarkan nama/kode rute
+        if (!raw || raw.length === 0) {
+          const all = await getSchedules({ limit: 1000 });
+          raw = Array.isArray(all?.data) ? all.data : Array.isArray(all) ? all : [];
+        }
+
+        // Nilai rute terpilih (fallback untuk kasus data jadwal tidak punya routeId tapi punya routeName/routeCode)
+        const routeInfo = routeDetails || selectedRouteData;
+        const selectedName = (routeInfo?.routeName || routeInfo?.route_name || '').toLowerCase();
+        const selectedCode = (routeInfo?.routeCode || routeInfo?.route_code || '').toLowerCase();
+
+        // Filter jadwal agar sesuai rute pilihan
+        let data = raw.filter((s) => {
+          const sid = String(s.routeId || s.route_id || '').toLowerCase();
+          const sName = String(s.routeName || s.route_name || '').toLowerCase();
+          const sCode = String(s.routeCode || s.route_code || '').toLowerCase();
+          const matchId = sid && sid === String(routeId).toLowerCase();
+          const matchName = selectedName && sName && sName.includes(selectedName);
+          const matchCode = selectedCode && sCode && sCode === selectedCode;
+          return matchId || matchName || matchCode;
+        });
+
+        // Filter berdasarkan tanggal (gunakan format YYYY-MM-DD agar tidak bermasalah dengan timezone)
+        if (date) {
+          const target = typeof date === 'string' ? date : toYMD(date);
+          // Utama: bandingkan menggunakan tanggal lokal agar tidak bergeser karena UTC offset
+          let filtered = data.filter((s) => s.time && toYMDLocal(s.time) === target);
+          // Fallback: jika kosong (kemungkinan perbedaan zona/konversi), coba pakai perbandingan UTC
+          if (filtered.length === 0) {
+            filtered = data.filter((s) => s.time && toYMDUTC(s.time) === target);
+          }
+          data = filtered;
+        }
+
+        return data.sort((a, b) => {
+          const ta = a.time ? new Date(a.time).getTime() : 0;
+          const tb = b.time ? new Date(b.time).getTime() : 0;
+          return ta - tb;
+        });
+      };
+
+      let data = await fetchSchedules();
+
+      // Jika baru saja memastikan jadwal dibuat tapi data belum muncul, coba ulang beberapa kali
+      let retryCount = 0;
+      while (data.length === 0 && retryCount < 3) {
+        if (retryCount > 0) {
+          setScheduleMsg(`Menunggu jadwal baru diproses... mencoba lagi (${retryCount + 1}/3).`);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        data = await fetchSchedules();
+        retryCount++;
+      }
+
+      const routeInfo = routeDetails || selectedRouteData;
+      const buildLabel = (schedule) => {
+        return `${schedule.time ? new Date(schedule.time).toLocaleString('id-ID') : 'Jadwal'} — ${(schedule.routeName || schedule.route_name || routeInfo?.routeName || 'Rute')} — ${schedule.busPlate || schedule.bus || 'Bus'} — ${schedule.driverName || schedule.driver || 'Driver'}`;
+      };
+
+      if (data.length > 0) {
+        // Auto-pilih jadwal pertama yang cocok
+        const first = data[0];
+        setSelectedSchedule(first.id);
+        setSelectedScheduleLabel(buildLabel(first));
+        const infoMessage = ensureMessage ? `${ensureMessage} ` : '';
+        setScheduleMsg(`${infoMessage}Ditemukan ${data.length} jadwal untuk rute ini. Jadwal pertama dipilih otomatis.`.trim());
       } else {
         setSelectedSchedule('');
         setSelectedScheduleLabel('');
-        setSelectedRoute(null);
-        setScheduleMsg('Tidak ada jadwal yang cocok.');
-        notify('warning', 'Tidak ada jadwal yang cocok');
+        // Detailkan alasan jika kosong
+        if (ensureInfo?.skipped === 'holiday') {
+          setScheduleMsg(ensureMessage || 'Tanggal yang dipilih adalah hari libur, jadwal tidak tersedia.');
+        } else if (ensureMessage) {
+          setScheduleMsg(`${ensureMessage} Tidak ada jadwal yang cocok untuk rute dan tanggal yang dipilih.`.trim());
+        } else {
+          setScheduleMsg('Belum ada jadwal yang tersedia dari server untuk rute ini.');
+        }
       }
     } catch (e) {
-      const msg = e?.message || 'Gagal mencari jadwal';
-      setScheduleMsg(msg);
-      notify('error', msg);
-      setSchedules([{ value: '', label: '-- pilih jadwal --', schedule: null }]);
+      const msg = e?.message || 'Gagal memuat jadwal untuk rute';
       setSelectedSchedule('');
-      setSelectedRoute(null);
+      setSelectedScheduleLabel('');
+      setScheduleMsg(msg);
     } finally {
       setLoadingSchedules(false);
     }
   };
 
+  // Reload jadwal saat tanggal berubah untuk rute yang sudah dipilih
+  React.useEffect(() => {
+    if (selectedRouteId) {
+      // Pastikan schedules dibuat untuk tanggal yang dipilih
+      loadSchedulesForRoute(selectedRouteId, selectedRouteData);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
   const handleOpenPurchase = () => {
-    if (!selectedSchedule) {
-      alert('Silakan cari dan pilih jadwal terlebih dahulu');
+    if (!selectedRouteId) {
+      notify('warning', 'Silakan cari dan pilih rute terlebih dahulu');
       return;
     }
-    requireAuth(() => setPurchaseOpen(true));
+    if (!selectedSchedule) {
+      notify('warning', 'Keberangkatan untuk rute ini belum tersedia. Coba ubah tanggal atau tunggu sejenak.');
+      return;
+    }
+    if (!isAuthenticated) {
+      setPendingOpenPurchase(true);
+      openLogin();
+      return;
+    }
+    setPurchaseOpen(true);
   };
 
   const handleValidate = async () => {
@@ -165,6 +357,21 @@ const TicketingPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user?.id]);
 
+  // Buka modal pembelian otomatis setelah login jika user sebelumnya mencoba membeli
+  useEffect(() => {
+    if (isAuthenticated && pendingOpenPurchase) {
+      setPendingOpenPurchase(false);
+      setPurchaseOpen(true);
+    }
+  }, [isAuthenticated, pendingOpenPurchase]);
+
+  // Jika user menutup modal login dengan klik di luar (tanpa login), batalkan niat beli
+  useEffect(() => {
+    if (!isAuthenticated && !isAuthModalOpen && pendingOpenPurchase) {
+      setPendingOpenPurchase(false);
+    }
+  }, [isAuthModalOpen, isAuthenticated, pendingOpenPurchase]);
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
       <div className="mb-8">
@@ -175,8 +382,8 @@ const TicketingPage = () => {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Cari Jadwal */}
         <Section
-          title="Cari Jadwal"
-          description="Temukan jadwal keberangkatan yang sesuai."
+          title="Cari Rute"
+          description="Temukan rute yang tersedia di database."
         >
           <div className="grid md:grid-cols-2 gap-4">
             <Field label="Kota / Rute">
@@ -191,30 +398,33 @@ const TicketingPage = () => {
             </Field>
           </div>
           <div className="mt-4 flex items-center gap-3">
-            <ActionButton onClick={handleSearchSchedules} disabled={loadingSchedules}>
-              <FiSearch /> {loadingSchedules ? 'Mencari...' : 'Cari Jadwal'}
+            <ActionButton onClick={handleSearchRoutes} disabled={loadingRoutes}>
+              <FiSearch /> {loadingRoutes ? 'Mencari...' : 'Cari Rute'}
             </ActionButton>
-            {scheduleMsg && <span className="text-sm text-textSecondary">{scheduleMsg}</span>}
+            {routesMsg && <span className="text-sm text-textSecondary">{routesMsg}</span>}
           </div>
         </Section>
 
         {/* Pilih Jadwal & Pengguna */}
         <Section
           title="Detail Pembelian"
-          description="Pilih jadwal dan pengguna untuk melanjutkan."
+          description="Tinjau rute, jadwal, dan akun sebelum melanjutkan."
         >
           <div className="grid md:grid-cols-2 gap-4">
-            <Field label="Pilih Jadwal (hasil pencarian)">
+            <Field label="Pilih Rute">
               <Select
-                value={selectedSchedule}
+                value={selectedRouteId}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setSelectedSchedule(v);
-                  const found = schedules.find(s => s.value === v);
-                  setSelectedScheduleLabel(found?.label || '');
-                  setSelectedRoute(found?.schedule || null); // update schedule yang dipilih (dari database)
+                  setSelectedRouteId(v);
+                  const found = routes.find(r => r.value === v);
+                  setSelectedRouteData(found?.route || null);
+                  // reset jadwal saat rute ganti
+                  setSelectedSchedule('');
+                  setSelectedScheduleLabel('');
+                  if (v) loadSchedulesForRoute(v, found?.route || null);
                 }}
-                options={schedules.length ? schedules : [{ value: '', label: '-- pilih jadwal --' }]}
+                options={routes.length ? routes : [{ value: '', label: '-- pilih rute --' }]}
               />
             </Field>
             <Field label="Pengguna">
@@ -223,8 +433,23 @@ const TicketingPage = () => {
               </div>
             </Field>
           </div>
+          <div className="mt-2 text-sm text-textSecondary space-y-1">
+            {loadingSchedules ? (
+              <p>Memuat jadwal...</p>
+            ) : (
+              <>
+                {selectedScheduleLabel && (
+                  <p className="text-text">
+                    <span className="font-medium text-textSecondary">Keberangkatan terpilih:</span>{' '}
+                    {selectedScheduleLabel}
+                  </p>
+                )}
+                {scheduleMsg && <p>{scheduleMsg}</p>}
+              </>
+            )}
+          </div>
           <div className="mt-4 flex gap-3">
-            <ActionButton onClick={handleOpenPurchase}>
+            <ActionButton onClick={handleOpenPurchase} disabled={loadingSchedules}>
               <FiCreditCard /> Beli Tiket
             </ActionButton>
           </div>
@@ -290,7 +515,7 @@ const TicketingPage = () => {
         onClose={() => { setPurchaseOpen(false); if (isAuthenticated) loadHistory(); }}
         scheduleId={selectedSchedule}
         scheduleLabel={selectedScheduleLabel}
-        route={selectedRoute}
+        route={selectedRouteData}
         date={date}
         onNotify={notify}
       />
